@@ -5,6 +5,7 @@ Bringing support for analog keyboards to games.
 ## Supported Games
 
 - Cyberpunk 2077
+- Grand Theft Auto V
 
 ## Prerequisites
 

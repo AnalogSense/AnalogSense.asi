@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="lib\MinHook 423d1e4\src\buffer.c">
+      <Filter>lib\MinHook 423d1e4\src</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\MinHook 423d1e4\src\hook.c">
+      <Filter>lib\MinHook 423d1e4\src</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\MinHook 423d1e4\src\trampoline.c">
+      <Filter>lib\MinHook 423d1e4\src</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\MinHook 423d1e4\src\hde\hde32.c">
+      <Filter>lib\MinHook 423d1e4\src\hde</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\MinHook 423d1e4\src\hde\hde64.c">
+      <Filter>lib\MinHook 423d1e4\src\hde</Filter>
+    </ClCompile>
+    <ClCompile Include="src\game_gta5.cpp" />
+    <ClCompile Include="src\game_cyberpunk2077.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="src\rage_input_helper.asm" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\game_gta5.hpp" />
+    <ClInclude Include="lib\MinHook 423d1e4\src\buffer.h">
+      <Filter>lib\MinHook 423d1e4\src</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\MinHook 423d1e4\src\trampoline.h">
+      <Filter>lib\MinHook 423d1e4\src</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\MinHook 423d1e4\src\hde\pstdint.h">
+      <Filter>lib\MinHook 423d1e4\src\hde</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\MinHook 423d1e4\src\hde\table32.h">
+      <Filter>lib\MinHook 423d1e4\src\hde</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\MinHook 423d1e4\src\hde\table64.h">
+      <Filter>lib\MinHook 423d1e4\src\hde</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\MinHook 423d1e4\src\hde\hde32.h">
+      <Filter>lib\MinHook 423d1e4\src\hde</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\MinHook 423d1e4\src\hde\hde64.h">
+      <Filter>lib\MinHook 423d1e4\src\hde</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\MinHook 423d1e4\include\MinHook.h">
+      <Filter>lib\MinHook 423d1e4\include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\common.hpp" />
+    <ClInclude Include="src\game_cyberpunk2077.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="lib">
+      <UniqueIdentifier>{e7e595c2-b0e4-40b5-ba1b-24aa7cae1872}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="lib\MinHook 423d1e4">
+      <UniqueIdentifier>{4517a9b5-db4d-4c89-a389-97ac995d812c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="lib\MinHook 423d1e4\src">
+      <UniqueIdentifier>{fe8bb6eb-0532-4c8c-aa02-0bba47f9a1e5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="lib\MinHook 423d1e4\src\hde">
+      <UniqueIdentifier>{1c1c6760-1d7a-4c9c-8c08-196e847e01b1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="lib\MinHook 423d1e4\include">
+      <UniqueIdentifier>{d344c032-cda0-45e1-8511-7926b5d792c4}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
