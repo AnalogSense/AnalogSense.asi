@@ -1,6 +1,6 @@
-# AnalogSense
+# AnalogSense.asi
 
-Bringing support for analog keyboards to games.
+Bringing support for analog keyboard input to games.
 
 [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/xIVNbDQNNW4/0.jpg)](https://www.youtube.com/watch?v=xIVNbDQNNW4)
 
