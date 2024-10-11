@@ -11,6 +11,4 @@ Bringing support for analog keyboard input to games.
 
 ## Prerequisites
 
-The Wooting Anlog SDK has to be installed. You can find the latest installers [here](https://github.com/WootingKb/wooting-analog-sdk/releases).
-
-If you have a Razer Huntsman Analog keyboard, you will need to install [the respective SDK plugin](https://github.com/calamity-inc/universal-analog-plugin).
+This plugin requires the [Wooting Analog SDK](https://github.com/WootingKb/wooting-analog-sdk/releases) to be installed. However, that doesn't mean it can only be used with Wooting keyboards, as there are [SDK plugins for other analog keyboards](https://github.com/AnalogSense/universal-analog-plugin).
