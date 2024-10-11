@@ -73,7 +73,7 @@ BOOL APIENTRY DllMain(HMODULE hmod, DWORD reason, PVOID)
 
 static int unload_counter = 0;
 
-static void analogsense_on_input_tick()
+void analogsense_on_input_tick()
 {
 	SOUP_IF_UNLIKELY (unload_counter == -1)
 	{
