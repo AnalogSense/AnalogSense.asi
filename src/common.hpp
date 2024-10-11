@@ -12,4 +12,5 @@ inline wooting_analog_read_full_buffer_t wooting_analog_read_full_buffer;
 
 // Hooks
 
+[[nodiscard]] extern float analogsense_transform_value(float value);
 extern void analogsense_on_input_tick();

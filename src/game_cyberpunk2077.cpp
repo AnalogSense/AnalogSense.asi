@@ -68,7 +68,7 @@ static void __fastcall ContextManager_ProcessInput_detour(void* _this, float dt,
 		std::lock_guard lock(map_mtx);
 		for (const auto& e : map)
 		{
-			*e.second = std::copysign(wooting_analog_read_analog(e.first), *e.second);
+			*e.second = std::copysign(analogsense_transform_value(wooting_analog_read_analog(e.first)), *e.second);
 		}
 	}
 

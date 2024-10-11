@@ -35,7 +35,7 @@ static void _fastcall rage_ioMapper_Update_detour(void* _this, unsigned int time
 		{
 			if (code_buffer[i] < COUNT(arr))
 			{
-				arr[code_buffer[i]] = analog_buffer[i];
+				arr[code_buffer[i]] = analogsense_transform_value(analog_buffer[i]);
 			}
 		}
 	}

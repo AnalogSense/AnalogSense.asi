@@ -1,6 +1,10 @@
 #include <iostream>
 
+#include <soup/filesystem.hpp>
+#include <soup/json.hpp>
 #include <soup/Process.hpp>
+#include <soup/ResponseCurve.hpp>
+#include <soup/string.hpp>
 
 #include "common.hpp"
 #include "game_cyberpunk2077.hpp"
@@ -8,6 +12,8 @@
 
 static HMODULE this_lib;
 static HMODULE wooting_lib;
+
+static soup::ResponseCurve curve;
 
 using game_integration_init_t = void(*)();
 using game_integration_deinit_t = void(*)();
@@ -66,9 +72,43 @@ BOOL APIENTRY DllMain(HMODULE hmod, DWORD reason, PVOID)
 		wooting_analog_read_analog = (wooting_analog_read_analog_t)GetProcAddress(wooting_lib, "wooting_analog_read_analog");
 		wooting_analog_read_full_buffer = (wooting_analog_read_full_buffer_t)GetProcAddress(wooting_lib, "wooting_analog_read_full_buffer");
 
+		{
+			const auto asdir = soup::filesystem::getProgramData() / "AnalogSense";
+			if (!std::filesystem::exists(asdir))
+			{
+				std::error_code ec;
+				std::filesystem::create_directory(asdir, ec);
+			}
+
+			const auto curvefile = asdir / "curve_points.json";
+			if (!std::filesystem::exists(curvefile))
+			{
+				soup::string::toFile(curvefile, "[]");
+			}
+
+			if (auto jr = soup::json::decode(soup::string::fromFile(curvefile)))
+			{
+				for (const auto& jPoint : jr->asArr())
+				{
+					curve.points.emplace_back(
+						static_cast<float>(jPoint.asObj().at("x").toFloat()),
+						static_cast<float>(jPoint.asObj().at("y").toFloat())
+					);
+				}
+			}
+
+			std::cout << "Response curve has " << (curve.points.size() + 2) << " points." << std::endl;
+		}
+
 		game_integration_init();
+		std::cout << "AnalogSense game integration has successfully initialised." << std::endl;
 	}
 	return TRUE;
+}
+
+float analogsense_transform_value(float value)
+{
+	return curve.getY(value);
 }
 
 static int unload_counter = 0;
