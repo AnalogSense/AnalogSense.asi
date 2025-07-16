@@ -40,6 +40,11 @@ BOOL APIENTRY DllMain(HMODULE hmod, DWORD reason, PVOID)
 				game_integration_init = &gta5_init;
 				game_integration_deinit = &gta5_deinit;
 			}
+			else if (proc_name == "GTA5_Enhanced.exe")
+			{
+				game_integration_init = &gta5_init_ee;
+				game_integration_deinit = &gta5_deinit;
+			}
 		}
 		if (!game_integration_init)
 		{
