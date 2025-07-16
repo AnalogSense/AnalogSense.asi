@@ -6,7 +6,6 @@
 
 #include <Windows.h>
 
-#include <soup/DelayedCtor.hpp>
 #include <soup/DetourHook.hpp>
 #include <soup/Module.hpp>
 #include <soup/Pattern.hpp>
