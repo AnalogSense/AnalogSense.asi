@@ -25,88 +25,95 @@ BOOL APIENTRY DllMain(HMODULE hmod, DWORD reason, PVOID)
 	if (reason == DLL_PROCESS_ATTACH)
 	{
 		this_lib = hmod;
-		DisableThreadLibraryCalls(hmod);
-
-		game_integration_init_t game_integration_init = nullptr;
+		CreateThread(nullptr, 0, [](PVOID) -> DWORD
 		{
-			const auto proc_name = soup::Process::current()->name;
-			if (proc_name == "Cyberpunk2077.exe")
+			game_integration_init_t game_integration_init = nullptr;
 			{
-				game_integration_init = &cyberpunk2077_init;
-				game_integration_deinit = &cyberpunk2077_deinit;
-			}
-			else if (proc_name == "GTA5.exe")
-			{
-				game_integration_init = &gta5_init;
-				game_integration_deinit = &gta5_deinit;
-			}
-			else if (proc_name == "GTA5_Enhanced.exe")
-			{
-				game_integration_init = &gta5_init_ee;
-				game_integration_deinit = &gta5_deinit;
-			}
-		}
-		if (!game_integration_init)
-		{
-			MessageBoxA(0, "This game is not supported by AnalogSense. Your keyboard input remains digital.", "AnalogSense", MB_OK | MB_ICONERROR);
-			return FALSE;
-		}
-
-#ifdef AS_DEBUG
-		AllocConsole();
-		{
-			FILE* f;
-			freopen_s(&f, "CONIN$", "r", stdin);
-			freopen_s(&f, "CONOUT$", "w", stderr);
-			freopen_s(&f, "CONOUT$", "w", stdout);
-		}
-#endif
-
-		wooting_lib = LoadLibraryA("wooting_analog_sdk");
-		if (!wooting_lib)
-		{
-			MessageBoxA(0, "Failed to load Wooting Analog SDK.", "AnalogSense", MB_OK | MB_ICONERROR);
-			return FALSE;
-		}
-		if (((wooting_analog_initialise_t)GetProcAddress(wooting_lib, "wooting_analog_initialise"))() < 0)
-		{
-			MessageBoxA(0, "Failed to initialize Wooting Analog SDK.", "AnalogSense", MB_OK | MB_ICONERROR);
-			return FALSE;
-		}
-		((wooting_analog_set_keycode_mode_t)GetProcAddress(wooting_lib, "wooting_analog_set_keycode_mode"))(2); // VirtualKey
-		wooting_analog_read_analog = (wooting_analog_read_analog_t)GetProcAddress(wooting_lib, "wooting_analog_read_analog");
-		wooting_analog_read_full_buffer = (wooting_analog_read_full_buffer_t)GetProcAddress(wooting_lib, "wooting_analog_read_full_buffer");
-
-		{
-			const auto asdir = soup::filesystem::getProgramData() / "AnalogSense";
-			if (!std::filesystem::exists(asdir))
-			{
-				std::error_code ec;
-				std::filesystem::create_directory(asdir, ec);
-			}
-
-			const auto curvefile = asdir / "curve_points.json";
-			if (!std::filesystem::exists(curvefile))
-			{
-				soup::string::toFile(curvefile, "[]");
-			}
-
-			if (auto jr = soup::json::decode(soup::string::fromFile(curvefile)))
-			{
-				for (const auto& jPoint : jr->asArr())
+				const auto proc_name = soup::Process::current()->name;
+				if (proc_name == "Cyberpunk2077.exe")
 				{
-					curve.points.emplace_back(
-						static_cast<float>(jPoint.asObj().at("x").toFloat()),
-						static_cast<float>(jPoint.asObj().at("y").toFloat())
-					);
+					game_integration_init = &cyberpunk2077_init;
+					game_integration_deinit = &cyberpunk2077_deinit;
+				}
+				else if (proc_name == "GTA5.exe")
+				{
+					game_integration_init = &gta5_init;
+					game_integration_deinit = &gta5_deinit;
+				}
+				else if (proc_name == "GTA5_Enhanced.exe")
+				{
+					while (!FindWindowW(L"sgaWindow", nullptr))
+					{
+						Sleep(10);
+					}
+					game_integration_init = &gta5_init_ee;
+					game_integration_deinit = &gta5_deinit;
 				}
 			}
+			if (!game_integration_init)
+			{
+				MessageBoxA(0, "This game is not supported by AnalogSense. Your keyboard input remains digital.", "AnalogSense", MB_OK | MB_ICONERROR);
+				return FALSE;
+			}
 
-			std::cout << "Response curve has " << (curve.points.size() + 2) << " points." << std::endl;
-		}
+#ifdef AS_DEBUG
+			AllocConsole();
+			{
+				FILE* f;
+				freopen_s(&f, "CONIN$", "r", stdin);
+				freopen_s(&f, "CONOUT$", "w", stderr);
+				freopen_s(&f, "CONOUT$", "w", stdout);
+			}
+#endif
 
-		game_integration_init();
-		std::cout << "AnalogSense game integration has successfully initialised." << std::endl;
+			wooting_lib = LoadLibraryA("wooting_analog_sdk");
+			if (!wooting_lib)
+			{
+				MessageBoxA(0, "Failed to load Wooting Analog SDK.", "AnalogSense", MB_OK | MB_ICONERROR);
+				return FALSE;
+			}
+			if (((wooting_analog_initialise_t)GetProcAddress(wooting_lib, "wooting_analog_initialise"))() < 0)
+			{
+				MessageBoxA(0, "Failed to initialize Wooting Analog SDK.", "AnalogSense", MB_OK | MB_ICONERROR);
+				return FALSE;
+			}
+			((wooting_analog_set_keycode_mode_t)GetProcAddress(wooting_lib, "wooting_analog_set_keycode_mode"))(2); // VirtualKey
+			wooting_analog_read_analog = (wooting_analog_read_analog_t)GetProcAddress(wooting_lib, "wooting_analog_read_analog");
+			wooting_analog_read_full_buffer = (wooting_analog_read_full_buffer_t)GetProcAddress(wooting_lib, "wooting_analog_read_full_buffer");
+
+			{
+				const auto asdir = soup::filesystem::getProgramData() / "AnalogSense";
+				if (!std::filesystem::exists(asdir))
+				{
+					std::error_code ec;
+					std::filesystem::create_directory(asdir, ec);
+				}
+
+				const auto curvefile = asdir / "curve_points.json";
+				if (!std::filesystem::exists(curvefile))
+				{
+					soup::string::toFile(curvefile, "[]");
+				}
+
+				if (auto jr = soup::json::decode(soup::string::fromFile(curvefile)))
+				{
+					for (const auto& jPoint : jr->asArr())
+					{
+						curve.points.emplace_back(
+							static_cast<float>(jPoint.asObj().at("x").toFloat()),
+							static_cast<float>(jPoint.asObj().at("y").toFloat())
+						);
+					}
+				}
+
+				std::cout << "Response curve has " << (curve.points.size() + 2) << " points." << std::endl;
+			}
+
+			game_integration_init();
+			std::cout << "AnalogSense game integration has successfully initialised." << std::endl;
+
+			return 0;
+		}, 0, 0, nullptr);
 	}
 	return TRUE;
 }
