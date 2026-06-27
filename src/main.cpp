@@ -9,6 +9,7 @@
 #include "common.hpp"
 #include "game_cyberpunk2077.hpp"
 #include "game_gta5.hpp"
+#include "game_rdr2.hpp"
 
 static HMODULE this_lib;
 static HMODULE wooting_lib;
@@ -48,6 +49,11 @@ BOOL APIENTRY DllMain(HMODULE hmod, DWORD reason, PVOID)
 					}
 					game_integration_init = &gta5_init_ee;
 					game_integration_deinit = &gta5_deinit;
+				}
+				else if (proc_name == "RDR2.exe")
+				{
+					game_integration_init = &rdr2_init;
+					game_integration_deinit = &rdr2_deinit;
 				}
 			}
 			if (!game_integration_init)

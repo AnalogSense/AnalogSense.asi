@@ -24,8 +24,11 @@
     <ClCompile Include="lib\MinHook 423d1e4\src\hde\hde64.c" />
     <ClCompile Include="lib\MinHook 423d1e4\src\hook.c" />
     <ClCompile Include="lib\MinHook 423d1e4\src\trampoline.c" />
+    <ClCompile Include="lib\safetyhook\safetyhook.cpp" />
+    <ClCompile Include="lib\safetyhook\Zydis.c" />
     <ClCompile Include="src\game_cyberpunk2077.cpp" />
     <ClCompile Include="src\game_gta5.cpp" />
+    <ClCompile Include="src\game_rdr2.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -40,8 +43,11 @@
     <ClInclude Include="lib\MinHook 423d1e4\src\hde\table32.h" />
     <ClInclude Include="lib\MinHook 423d1e4\src\hde\table64.h" />
     <ClInclude Include="lib\MinHook 423d1e4\src\trampoline.h" />
+    <ClInclude Include="lib\safetyhook\safetyhook.hpp" />
+    <ClInclude Include="lib\safetyhook\Zydis.h" />
     <ClInclude Include="src\game_cyberpunk2077.hpp" />
     <ClInclude Include="src\game_gta5.hpp" />
+    <ClInclude Include="src\game_rdr2.hpp" />
     <ClInclude Include="src\common.hpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -55,26 +61,26 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>ClangCL</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>ClangCL</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>ClangCL</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>ClangCL</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -100,18 +106,22 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>bin\$(Configuration) $(Platform)\</OutDir>
     <IntDir>bin\$(Configuration) $(Platform)\int\</IntDir>
+    <TargetExt>.asi</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>bin\$(Configuration) $(Platform)\</OutDir>
     <IntDir>bin\$(Configuration) $(Platform)\int\</IntDir>
+    <TargetExt>.asi</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>bin\$(Configuration) $(Platform)\</OutDir>
     <IntDir>bin\$(Configuration) $(Platform)\int\</IntDir>
+    <TargetExt>.asi</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>bin\$(Configuration) $(Platform)\</OutDir>
     <IntDir>bin\$(Configuration) $(Platform)\int\</IntDir>
+    <TargetExt>.asi</TargetExt>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -119,10 +129,10 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>AS_DEBUG;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp23</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
-      <AdditionalIncludeDirectories>../Soup;lib/MinHook 423d1e4/include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../Soup;lib/MinHook 423d1e4/include;lib\safetyhook</AdditionalIncludeDirectories>
       <AdditionalOptions>/Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
@@ -132,7 +142,8 @@
       <AdditionalDependencies>../Soup/bin/ReleaseDLL $(Platform)/Soup.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>cd $(OutputPath) &amp;&amp; mv $(ProjectName).dll $(ProjectName).asi</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -143,10 +154,10 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>AS_RELEASE;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp23</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
-      <AdditionalIncludeDirectories>../Soup;lib/MinHook 423d1e4/include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../Soup;lib/MinHook 423d1e4/include;lib\safetyhook</AdditionalIncludeDirectories>
       <AdditionalOptions>/Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
@@ -158,7 +169,8 @@
       <AdditionalDependencies>../Soup/bin/ReleaseDLL $(Platform)/Soup.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>cd $(OutputPath) &amp;&amp; mv $(ProjectName).dll $(ProjectName).asi</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -167,10 +179,10 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>AS_DEBUG;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp23</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
-      <AdditionalIncludeDirectories>../Soup;lib/MinHook 423d1e4/include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../Soup;lib/MinHook 423d1e4/include;lib\safetyhook</AdditionalIncludeDirectories>
       <AdditionalOptions>/Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
@@ -180,7 +192,8 @@
       <AdditionalDependencies>../Soup/bin/ReleaseDLL $(Platform)/Soup.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>cd $(OutputPath) &amp;&amp; mv $(ProjectName).dll $(ProjectName).asi</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -191,10 +204,10 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>AS_RELEASE;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp23</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
-      <AdditionalIncludeDirectories>../Soup;lib/MinHook 423d1e4/include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../Soup;lib/MinHook 423d1e4/include;lib\safetyhook</AdditionalIncludeDirectories>
       <AdditionalOptions>/Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
@@ -206,7 +219,8 @@
       <AdditionalDependencies>../Soup/bin/ReleaseDLL $(Platform)/Soup.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>cd $(OutputPath) &amp;&amp; mv $(ProjectName).dll $(ProjectName).asi</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

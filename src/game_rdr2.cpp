@@ -1,0 +1,413 @@
+#include "game_rdr2.hpp"
+
+#include <Windows.h>
+
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+
+#include <safetyhook.hpp>
+#include <soup/DetourHook.hpp>
+#include <soup/macros.hpp>
+#include <soup/Module.hpp>
+#include <soup/Pattern.hpp>
+
+#include "common.hpp"
+
+using namespace soup;
+
+static DetourHook rdr2_update_pending_input_hook;
+static SafetyHookMid rdr2_keyboard_action_hook;
+static float keyboard_values[256];
+static float rdr2_injected_keyboard_values[256];
+
+struct Rdr2PendingSource
+{
+	uint32_t packed;
+	uint16_t flags;
+	uint16_t pad;
+	uint32_t mode;
+	float value;
+};
+
+struct Rdr2PendingSourceOverride
+{
+	void* mapper;
+	Rdr2PendingSource* original_sources;
+	uint16_t original_count;
+	bool active;
+};
+
+static Rdr2PendingSource rdr2_pending_source_buffer[512];
+
+static bool* rdr2_keyboard_ignore_input;
+static bool* rdr2_keyboard_enabled;
+static void** rdr2_keyboard_di_device;
+static bool* rdr2_keyboard_di_lost;
+static HWND* rdr2_hwnd_main;
+
+static void* resolve_rip_target(uint8_t* instruction, size_t displacement_offset, size_t instruction_size)
+{
+	const auto displacement = *reinterpret_cast<int32_t*>(instruction + displacement_offset);
+	return instruction + instruction_size + displacement;
+}
+
+static bool rdr2_game_accepts_keyboard_input()
+{
+	if (!rdr2_keyboard_ignore_input || !rdr2_keyboard_enabled || !rdr2_keyboard_di_device || !rdr2_keyboard_di_lost || !rdr2_hwnd_main)
+		return false;
+
+	if (*rdr2_keyboard_ignore_input || !*rdr2_keyboard_enabled)
+		return false;
+
+	if (!*rdr2_keyboard_di_device)
+		return GetForegroundWindow() == *rdr2_hwnd_main;
+
+	return !*rdr2_keyboard_di_lost;
+}
+
+static void read_wooting_keyboard_values()
+{
+	std::memset(keyboard_values, 0, sizeof(keyboard_values));
+
+	if (!rdr2_game_accepts_keyboard_input())
+		return;
+
+	unsigned short code_buffer[16];
+	float analog_buffer[16];
+	const int num = wooting_analog_read_full_buffer(code_buffer, analog_buffer, COUNT(code_buffer));
+	if (num >= 0)
+	{
+		for (int i = 0; i != num; ++i)
+		{
+			if (code_buffer[i] < COUNT(keyboard_values))
+			{
+				keyboard_values[code_buffer[i]] = analogsense_transform_value(analog_buffer[i]);
+			}
+		}
+	}
+}
+
+static Rdr2PendingSourceOverride rdr2_begin_pending_source_override(void* mapper)
+{
+	Rdr2PendingSourceOverride state{};
+	state.mapper = mapper;
+
+	if (!mapper)
+		return state;
+
+	auto* mapper_base = static_cast<uint8_t*>(mapper);
+	auto** sources_ptr = reinterpret_cast<Rdr2PendingSource**>(mapper_base + 0xB18);
+	auto* count_ptr = reinterpret_cast<uint16_t*>(mapper_base + 0xB20);
+
+	state.original_sources = *sources_ptr;
+	state.original_count = *count_ptr;
+
+	if (state.original_count > COUNT(rdr2_pending_source_buffer))
+		return state;
+
+	size_t out_count = 0;
+	if (state.original_count != 0)
+	{
+		if (!state.original_sources)
+			return state;
+
+		std::memcpy(rdr2_pending_source_buffer, state.original_sources, state.original_count * sizeof(Rdr2PendingSource));
+		out_count = state.original_count;
+	}
+
+	for (uint32_t vk = 1; vk != COUNT(keyboard_values); ++vk)
+	{
+		const float value = keyboard_values[vk];
+		const float previous_value = rdr2_injected_keyboard_values[vk];
+		if (std::fabs(value - previous_value) < 0.0001f)
+			continue;
+
+		if (out_count == COUNT(rdr2_pending_source_buffer))
+			break;
+
+		rdr2_pending_source_buffer[out_count++] =
+		{
+			vk << 8,
+			0,
+			0,
+			0,
+			value
+		};
+
+		rdr2_injected_keyboard_values[vk] = value;
+	}
+
+	if (out_count == state.original_count)
+		return state;
+
+	*sources_ptr = rdr2_pending_source_buffer;
+	*count_ptr = static_cast<uint16_t>(out_count);
+	state.active = true;
+	return state;
+}
+
+static void rdr2_end_pending_source_override(const Rdr2PendingSourceOverride& state)
+{
+	if (!state.active || !state.mapper)
+		return;
+
+	auto* mapper_base = static_cast<uint8_t*>(state.mapper);
+	*reinterpret_cast<Rdr2PendingSource**>(mapper_base + 0xB18) = state.original_sources;
+	*reinterpret_cast<uint16_t*>(mapper_base + 0xB20) = state.original_count;
+}
+
+static void __fastcall rdr2_update_pending_input_detour(void* mapper)
+{
+	read_wooting_keyboard_values();
+	analogsense_on_input_tick();
+
+	const auto pending_sources = rdr2_begin_pending_source_override(mapper);
+	reinterpret_cast<decltype(&rdr2_update_pending_input_detour)>(rdr2_update_pending_input_hook.original)(mapper);
+	rdr2_end_pending_source_override(pending_sources);
+}
+
+
+static bool source_action_is_analog(uint32_t kind, uint32_t action_id)
+{
+	if (kind == 8)
+		return false;
+
+	// RDR2 action ids are INPUT_* enum indices from the name table which start with the 
+	// "UNDEFINED_INPUT". We have to keep this restricted to real axes, otherwise any actions for pressed and such a like don't register that well
+	// im not sure if the cases I have listed here is enough but should do -clippy95
+	switch (action_id)
+	{
+	case INPUT_LOOK_LR:
+	case INPUT_LOOK_UD:
+	case INPUT_LOOK_UP_ONLY:
+	case INPUT_LOOK_DOWN_ONLY:
+	case INPUT_LOOK_LEFT_ONLY:
+	case INPUT_LOOK_RIGHT_ONLY:
+	case INPUT_MOVE_LR:
+	case INPUT_MOVE_UD:
+	case INPUT_MOVE_UP_ONLY:
+	case INPUT_MOVE_DOWN_ONLY:
+	case INPUT_MOVE_LEFT_ONLY:
+	case INPUT_MOVE_RIGHT_ONLY:
+	case INPUT_VEH_MOVE_LR:
+	case INPUT_VEH_MOVE_UD:
+	case INPUT_VEH_MOVE_UP_ONLY:
+	case INPUT_VEH_MOVE_DOWN_ONLY:
+	case INPUT_VEH_MOVE_LEFT_ONLY:
+	case INPUT_VEH_MOVE_RIGHT_ONLY:
+	case INPUT_VEH_ACCELERATE:
+	case INPUT_VEH_BRAKE:
+	case INPUT_VEH_FLY_THROTTLE_UP:
+	case INPUT_VEH_FLY_THROTTLE_DOWN:
+	case INPUT_VEH_FLY_YAW_LEFT:
+	case INPUT_VEH_FLY_YAW_RIGHT:
+	case INPUT_VEH_FLY_ROLL_LR:
+	case INPUT_VEH_FLY_ROLL_LEFT_ONLY:
+	case INPUT_VEH_FLY_ROLL_RIGHT_ONLY:
+	case INPUT_VEH_FLY_PITCH_UD:
+	case INPUT_VEH_FLY_PITCH_UP_ONLY:
+	case INPUT_VEH_FLY_PITCH_DOWN_ONLY:
+	case INPUT_VEH_SUB_TURN_LR:
+	case INPUT_VEH_SUB_TURN_LEFT_ONLY:
+	case INPUT_VEH_SUB_TURN_RIGHT_ONLY:
+	case INPUT_VEH_SUB_PITCH_UD:
+	case INPUT_VEH_SUB_PITCH_UP_ONLY:
+	case INPUT_VEH_SUB_PITCH_DOWN_ONLY:
+	case INPUT_VEH_SUB_THROTTLE_UP:
+	case INPUT_VEH_SUB_THROTTLE_DOWN:
+	case INPUT_VEH_PUSHBIKE_PEDAL:
+	case INPUT_VEH_PUSHBIKE_FRONT_BRAKE:
+	case INPUT_VEH_PUSHBIKE_REAR_BRAKE:
+	case INPUT_VEH_DRAFT_MOVE_UD:
+	case INPUT_VEH_DRAFT_TURN_LR:
+	case INPUT_VEH_DRAFT_MOVE_UP_ONLY:
+	case INPUT_VEH_DRAFT_MOVE_DOWN_ONLY:
+	case INPUT_VEH_DRAFT_TURN_LEFT_ONLY:
+	case INPUT_VEH_DRAFT_TURN_RIGHT_ONLY:
+	case INPUT_VEH_DRAFT_ACCELERATE:
+	case INPUT_VEH_DRAFT_BRAKE:
+	case INPUT_VEH_BOAT_TURN_LR:
+	case INPUT_VEH_BOAT_TURN_LEFT_ONLY:
+	case INPUT_VEH_BOAT_TURN_RIGHT_ONLY:
+	case INPUT_VEH_BOAT_ACCELERATE:
+	case INPUT_VEH_BOAT_BRAKE:
+	case INPUT_VEH_CAR_TURN_LR:
+	case INPUT_VEH_CAR_TURN_LEFT_ONLY:
+	case INPUT_VEH_CAR_TURN_RIGHT_ONLY:
+	case INPUT_VEH_CAR_ACCELERATE:
+	case INPUT_VEH_CAR_BRAKE:
+	case INPUT_VEH_HANDCART_ACCELERATE:
+	case INPUT_VEH_HANDCART_BRAKE:
+	case INPUT_HORSE_MOVE_LR:
+	case INPUT_HORSE_MOVE_UD:
+	case INPUT_HORSE_MOVE_UP_ONLY:
+	case INPUT_HORSE_MOVE_DOWN_ONLY:
+	case INPUT_HORSE_MOVE_LEFT_ONLY:
+	case INPUT_HORSE_MOVE_RIGHT_ONLY:
+	case INPUT_PARACHUTE_TURN_LR:
+	case INPUT_PARACHUTE_TURN_LEFT_ONLY:
+	case INPUT_PARACHUTE_TURN_RIGHT_ONLY:
+	case INPUT_PARACHUTE_PITCH_UD:
+	case INPUT_PARACHUTE_PITCH_UP_ONLY:
+	case INPUT_PARACHUTE_PITCH_DOWN_ONLY:
+	case INPUT_PARACHUTE_BRAKE_LEFT:
+	case INPUT_PARACHUTE_BRAKE_RIGHT:
+	case INPUT_CREATOR_ZOOM_IN:
+	case INPUT_CREATOR_ZOOM_OUT:
+	case INPUT_CREATOR_RAISE:
+	case INPUT_CREATOR_LOWER:
+	case INPUT_CREATOR_MOVE_UD:
+	case INPUT_CREATOR_MOVE_LR:
+	case INPUT_CREATOR_LOOK_UD:
+	case INPUT_CREATOR_LOOK_LR:
+	case INPUT_MINIGAME_FISHING_LEFT_AXIS_X:
+	case INPUT_MINIGAME_FISHING_LEFT_AXIS_Y:
+	case INPUT_MINIGAME_FISHING_RIGHT_AXIS_X:
+	case INPUT_MINIGAME_FISHING_RIGHT_AXIS_Y:
+	case INPUT_MINIGAME_FISHING_LEAN_LEFT:
+	case INPUT_MINIGAME_FISHING_LEAN_RIGHT:
+	case INPUT_MINIGAME_FISHING_REEL_SPEED_UP:
+	case INPUT_MINIGAME_FISHING_REEL_SPEED_DOWN:
+	case INPUT_MINIGAME_FISHING_REEL_SPEED_AXIS:
+	case INPUT_MINIGAME_FISHING_MANUAL_REEL_IN:
+	case INPUT_MINIGAME_FISHING_MANUAL_REEL_OUT_MODIFER:
+	case INPUT_CAMERA_ZOOM:
+	case INPUT_CAMERA_ADVANCED_ZOOM_IN:
+	case INPUT_CAMERA_ADVANCED_ZOOM_OUT:
+	case INPUT_PHOTO_MODE_MOVE_LR:
+	case INPUT_PHOTO_MODE_MOVE_LEFT_ONLY:
+	case INPUT_PHOTO_MODE_MOVE_RIGHT_ONLY:
+	case INPUT_PHOTO_MODE_MOVE_UD:
+	case INPUT_PHOTO_MODE_MOVE_UP_ONLY:
+	case INPUT_PHOTO_MODE_MOVE_DOWN_ONLY:
+	case INPUT_PHOTO_MODE_ROTATE_LEFT:
+	case INPUT_PHOTO_MODE_ROTATE_RIGHT:
+	case INPUT_PHOTO_MODE_FILTER_INTENSITY:
+	case INPUT_PHOTO_MODE_FILTER_INTENSITY_UP:
+	case INPUT_PHOTO_MODE_FILTER_INTENSITY_DOWN:
+	case INPUT_PHOTO_MODE_FOCAL_LENGTH:
+	case INPUT_PHOTO_MODE_FOCAL_LENGTH_UP_ONLY:
+	case INPUT_PHOTO_MODE_FOCAL_LENGTH_DOWN_ONLY:
+	case INPUT_PHOTO_MODE_ZOOM_IN:
+	case INPUT_PHOTO_MODE_ZOOM_OUT:
+	case INPUT_PHOTO_MODE_DOF:
+	case INPUT_PHOTO_MODE_DOF_UP_ONLY:
+	case INPUT_PHOTO_MODE_DOF_DOWN_ONLY:
+	case INPUT_PHOTO_MODE_EXPOSURE_UP:
+	case INPUT_PHOTO_MODE_EXPOSURE_DOWN:
+	case INPUT_PHOTO_MODE_CONTRAST:
+	case INPUT_PHOTO_MODE_CONTRAST_UP_ONLY:
+	case INPUT_PHOTO_MODE_CONTRAST_DOWN_ONLY:
+	case INPUT_SCRIPT_LEFT_AXIS_X:
+	case INPUT_SCRIPT_LEFT_AXIS_Y:
+	case INPUT_SCRIPT_RIGHT_AXIS_X:
+	case INPUT_SCRIPT_RIGHT_AXIS_Y:
+		return true;
+	default:
+		return false;
+	}
+}
+
+#ifdef AS_DEBUG
+static void nop_bytes(void* address, size_t size)
+{
+	auto* p = static_cast<uint8_t*>(address);
+	auto unprotect = safetyhook::unprotect(p, size);
+	if (!unprotect)
+		return;
+
+	std::memset(p, 0x90, size);
+	FlushInstructionCache(GetCurrentProcess(), p, size);
+}
+#endif
+
+static void keyboard_action_mid(SafetyHookContext& ctx)
+{
+	if (!ctx.rbx || !ctx.r8)
+		return;
+
+	const uint32_t packed = *reinterpret_cast<uint32_t*>(ctx.r8);
+
+	// Only accept simple VK-packed keyboard params: 0x0000VV00.
+	if ((packed & 0xFFFF00FF) != 0)
+		return;
+
+	const uint32_t vk = (packed >> 8) & 0xFF;
+	if (vk == 0 || vk >= COUNT(keyboard_values))
+		return;
+
+	const uint32_t source_kind = *reinterpret_cast<uint32_t*>(ctx.rbx + 0x20);
+	const uint32_t action_id = static_cast<uint32_t>(ctx.r15);
+
+	if (source_action_is_analog(source_kind, action_id))
+		return;
+
+	if (keyboard_values[vk] > 0.0f)
+	{
+		const float value = ctx.xmm1.f32[0];
+		ctx.xmm1.f32[0] = value == 0.0f ? 1.0f : std::copysign(1.0f, value);
+	}
+}
+
+void rdr2_init()
+{
+	auto keyboard_update_state = Module(nullptr).range.scan(Pattern("48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 41 56 41 57 48 81 EC ? ? ? ? 8A D9 E8 ? ? ? ? 88 1D ? ? ? ? E8 ? ? ? ? 33 FF 84 DB"));
+	std::cout << "keyboard_update_state = " << keyboard_update_state.as<void*>() << std::endl;
+	if (auto keyboard_update_state_ptr = keyboard_update_state.as<uint8_t*>())
+	{
+		rdr2_keyboard_ignore_input = static_cast<bool*>(resolve_rip_target(keyboard_update_state_ptr + 0x22, 2, 6));
+		rdr2_keyboard_enabled = static_cast<bool*>(resolve_rip_target(keyboard_update_state_ptr + 0x37, 3, 7));
+		rdr2_keyboard_di_device = static_cast<void**>(resolve_rip_target(keyboard_update_state_ptr + 0x49, 3, 7));
+		rdr2_hwnd_main = static_cast<HWND*>(resolve_rip_target(keyboard_update_state_ptr + 0x5F, 3, 7));
+		rdr2_keyboard_di_lost = static_cast<bool*>(resolve_rip_target(keyboard_update_state_ptr + 0xEF, 3, 7));
+	}
+
+	auto rdr2_update_pending_input = Module(nullptr).range.scan(Pattern("48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC ? 48 8B F9 48 83 C1 ? E8 ? ? ? ? 33 DB 38 9F ? ? ? ? 74 ? 48 8B CF"));
+	std::cout << "rdr2_update_pending_input = " << rdr2_update_pending_input.as<void*>() << std::endl;
+
+	if (auto rdr2_update_pending_input_ptr = rdr2_update_pending_input.as<void*>())
+	{
+		rdr2_update_pending_input_hook.detour = reinterpret_cast<void*>(rdr2_update_pending_input_detour);
+		rdr2_update_pending_input_hook.target = rdr2_update_pending_input_ptr;
+		rdr2_update_pending_input_hook.create();
+		rdr2_update_pending_input_hook.enable();
+	}
+
+#ifdef AS_DEBUG
+	// from RageOpenRDR2, game has anti opening console technique
+	auto console_protection = Module(nullptr).range.scan(Pattern("ff 15 ? ? ? ? 33 c9 ff 15 ? ? ? ? 45 33 c9"));
+	auto ptr = console_protection.as<void*>();
+	if (ptr)
+		nop_bytes(ptr, 6);
+#endif
+
+	auto keyboard_action_call = Module(nullptr).range.scan(Pattern("E8 ? ? ? ? 40 08 7E ? F0 01 7B"));
+	std::cout << "keyboard_action_call = " << keyboard_action_call.as<void*>() << std::endl;
+	if (auto keyboard_action_call_ptr = keyboard_action_call.as<void*>())
+	{
+		rdr2_keyboard_action_hook = safetyhook::create_mid(keyboard_action_call_ptr, keyboard_action_mid);
+	}
+}
+
+void rdr2_deinit()
+{
+	if (rdr2_keyboard_action_hook)
+	{
+		rdr2_keyboard_action_hook.reset();
+	}
+
+	if (rdr2_update_pending_input_hook.isCreated())
+	{
+		rdr2_update_pending_input_hook.disable();
+		rdr2_update_pending_input_hook.destroy();
+	}
+
+	rdr2_keyboard_ignore_input = nullptr;
+	rdr2_keyboard_enabled = nullptr;
+	rdr2_keyboard_di_device = nullptr;
+	rdr2_keyboard_di_lost = nullptr;
+	rdr2_hwnd_main = nullptr;
+	std::memset(rdr2_injected_keyboard_values, 0, sizeof(rdr2_injected_keyboard_values));
+}
