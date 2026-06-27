@@ -57,23 +57,37 @@ struct Rdr2AnalogBinding
 
 static Rdr2SetInputValue rdr2_set_input_value;
 static Rdr2AnalogBinding rdr2_analog_bindings[256];
+static bool* rdr2_keyboard_ignore_input;
+static bool* rdr2_keyboard_enabled;
+static void** rdr2_keyboard_di_device;
+static bool* rdr2_keyboard_di_lost;
+static HWND* rdr2_hwnd_main;
 
-static bool rdr2_is_foreground_process()
+static void* resolve_rip_target(uint8_t* instruction, size_t displacement_offset, size_t instruction_size)
 {
-	const HWND foreground_window = GetForegroundWindow();
-	if (!foreground_window)
+	const auto displacement = *reinterpret_cast<int32_t*>(instruction + displacement_offset);
+	return instruction + instruction_size + displacement;
+}
+
+static bool rdr2_game_accepts_keyboard_input()
+{
+	if (!rdr2_keyboard_ignore_input || !rdr2_keyboard_enabled || !rdr2_keyboard_di_device || !rdr2_keyboard_di_lost || !rdr2_hwnd_main)
 		return false;
 
-	DWORD foreground_process_id = 0;
-	GetWindowThreadProcessId(foreground_window, &foreground_process_id);
-	return foreground_process_id == GetCurrentProcessId();
+	if (*rdr2_keyboard_ignore_input || !*rdr2_keyboard_enabled)
+		return false;
+
+	if (!*rdr2_keyboard_di_device)
+		return GetForegroundWindow() == *rdr2_hwnd_main;
+
+	return !*rdr2_keyboard_di_lost;
 }
 
 static void read_wooting_keyboard_values()
 {
 	std::memset(keyboard_values, 0, sizeof(keyboard_values));
 
-	if (!rdr2_is_foreground_process())
+	if (!rdr2_game_accepts_keyboard_input())
 		return;
 
 	unsigned short code_buffer[16];
@@ -529,6 +543,17 @@ static void keyboard_action_mid(SafetyHookContext& ctx)
 
 void rdr2_init()
 {
+	auto keyboard_update_state = Module(nullptr).range.scan(Pattern("48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 41 56 41 57 48 81 EC ? ? ? ? 8A D9 E8 ? ? ? ? 88 1D ? ? ? ? E8 ? ? ? ? 33 FF 84 DB"));
+	std::cout << "keyboard_update_state = " << keyboard_update_state.as<void*>() << std::endl;
+	if (auto keyboard_update_state_ptr = keyboard_update_state.as<uint8_t*>())
+	{
+		rdr2_keyboard_ignore_input = static_cast<bool*>(resolve_rip_target(keyboard_update_state_ptr + 0x22, 2, 6));
+		rdr2_keyboard_enabled = static_cast<bool*>(resolve_rip_target(keyboard_update_state_ptr + 0x37, 3, 7));
+		rdr2_keyboard_di_device = static_cast<void**>(resolve_rip_target(keyboard_update_state_ptr + 0x49, 3, 7));
+		rdr2_hwnd_main = static_cast<HWND*>(resolve_rip_target(keyboard_update_state_ptr + 0x5F, 3, 7));
+		rdr2_keyboard_di_lost = static_cast<bool*>(resolve_rip_target(keyboard_update_state_ptr + 0xEF, 3, 7));
+	}
+
 	auto rdr2_update_pending_input = Module(nullptr).range.scan(Pattern("48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC ? 48 8B F9 48 83 C1 ? E8 ? ? ? ? 33 DB 38 9F ? ? ? ? 74 ? 48 8B CF"));
 	std::cout << "rdr2_update_pending_input = " << rdr2_update_pending_input.as<void*>() << std::endl;
 
@@ -570,6 +595,11 @@ void rdr2_deinit()
 	}
 
 	rdr2_set_input_value = nullptr;
+	rdr2_keyboard_ignore_input = nullptr;
+	rdr2_keyboard_enabled = nullptr;
+	rdr2_keyboard_di_device = nullptr;
+	rdr2_keyboard_di_lost = nullptr;
+	rdr2_hwnd_main = nullptr;
 	std::memset(rdr2_analog_bindings, 0, sizeof(rdr2_analog_bindings));
 	std::memset(rdr2_injected_keyboard_values, 0, sizeof(rdr2_injected_keyboard_values));
 }
