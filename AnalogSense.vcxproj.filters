@@ -18,13 +18,21 @@
       <Filter>lib\MinHook 423d1e4\src\hde</Filter>
     </ClCompile>
     <ClCompile Include="src\game_gta5.cpp" />
+    <ClCompile Include="src\game_rdr2.cpp" />
     <ClCompile Include="src\game_cyberpunk2077.cpp" />
+    <ClCompile Include="lib\safetyhook\safetyhook.cpp">
+      <Filter>lib\safetyhook</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\safetyhook\Zydis.c">
+      <Filter>lib\safetyhook</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="src\rage_input_helper.asm" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\game_gta5.hpp" />
+    <ClInclude Include="src\game_rdr2.hpp" />
     <ClInclude Include="lib\MinHook 423d1e4\src\buffer.h">
       <Filter>lib\MinHook 423d1e4\src</Filter>
     </ClInclude>
@@ -51,6 +59,12 @@
     </ClInclude>
     <ClInclude Include="src\common.hpp" />
     <ClInclude Include="src\game_cyberpunk2077.hpp" />
+    <ClInclude Include="lib\safetyhook\safetyhook.hpp">
+      <Filter>lib\safetyhook</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\safetyhook\Zydis.h">
+      <Filter>lib\safetyhook</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="lib">
@@ -67,6 +81,9 @@
     </Filter>
     <Filter Include="lib\MinHook 423d1e4\include">
       <UniqueIdentifier>{d344c032-cda0-45e1-8511-7926b5d792c4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="lib\safetyhook">
+      <UniqueIdentifier>{480efbf2-9ed9-4836-a6e2-cb84fbdaa093}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>
