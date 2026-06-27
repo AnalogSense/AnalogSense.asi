@@ -41,22 +41,6 @@ struct Rdr2PendingSourceOverride
 
 static Rdr2PendingSource rdr2_pending_source_buffer[512];
 
-using Rdr2SetInputValue = void(__fastcall*)(void* io_value, float value, uint32_t* source_param);
-
-struct Rdr2AnalogBinding
-{
-	uintptr_t io_value;
-	uint32_t packed;
-	uint32_t vk;
-	uint32_t source_kind;
-	uint32_t action_id;
-	float sign;
-	float last_value;
-	bool valid;
-};
-
-static Rdr2SetInputValue rdr2_set_input_value;
-static Rdr2AnalogBinding rdr2_analog_bindings[256];
 static bool* rdr2_keyboard_ignore_input;
 static bool* rdr2_keyboard_enabled;
 static void** rdr2_keyboard_di_device;
@@ -102,26 +86,6 @@ static void read_wooting_keyboard_values()
 				keyboard_values[code_buffer[i]] = analogsense_transform_value(analog_buffer[i]);
 			}
 		}
-	}
-}
-
-static void rdr2_apply_cached_analog_bindings()
-{
-	if (!rdr2_set_input_value)
-		return;
-
-	for (auto& binding : rdr2_analog_bindings)
-	{
-		if (!binding.valid || binding.vk >= COUNT(keyboard_values))
-			continue;
-
-		const float value = keyboard_values[binding.vk] * binding.sign;
-		if (value == 0.0f && binding.last_value == 0.0f)
-			continue;
-
-		uint32_t packed = binding.packed;
-		rdr2_set_input_value(reinterpret_cast<void*>(binding.io_value), value, &packed);
-		binding.last_value = value;
 	}
 }
 
@@ -346,160 +310,6 @@ static bool source_action_is_analog(uint32_t kind, uint32_t action_id)
 	}
 }
 
-static float source_action_sign(uint32_t action_id, float game_value)
-{
-	if (game_value != 0.0f)
-		return std::copysign(1.0f, game_value);
-
-	switch (action_id)
-	{
-	case INPUT_MOVE_UP_ONLY:
-	case INPUT_LOOK_UP_ONLY:
-	case INPUT_VEH_MOVE_UP_ONLY:
-	case INPUT_VEH_FLY_PITCH_UP_ONLY:
-	case INPUT_VEH_SUB_PITCH_UP_ONLY:
-	case INPUT_VEH_DRAFT_MOVE_UP_ONLY:
-	case INPUT_HORSE_MOVE_UP_ONLY:
-	case INPUT_PARACHUTE_PITCH_UP_ONLY:
-	case INPUT_PHOTO_MODE_MOVE_UP_ONLY:
-	case INPUT_PHOTO_MODE_FOCAL_LENGTH_UP_ONLY:
-	case INPUT_PHOTO_MODE_DOF_UP_ONLY:
-	case INPUT_PHOTO_MODE_FILTER_INTENSITY_UP:
-	case INPUT_PHOTO_MODE_EXPOSURE_UP:
-	case INPUT_PHOTO_MODE_CONTRAST_UP_ONLY:
-		return -1.0f;
-	case INPUT_MOVE_DOWN_ONLY:
-	case INPUT_LOOK_DOWN_ONLY:
-	case INPUT_VEH_MOVE_DOWN_ONLY:
-	case INPUT_VEH_FLY_PITCH_DOWN_ONLY:
-	case INPUT_VEH_SUB_PITCH_DOWN_ONLY:
-	case INPUT_VEH_DRAFT_MOVE_DOWN_ONLY:
-	case INPUT_HORSE_MOVE_DOWN_ONLY:
-	case INPUT_PARACHUTE_PITCH_DOWN_ONLY:
-	case INPUT_PHOTO_MODE_MOVE_DOWN_ONLY:
-	case INPUT_PHOTO_MODE_FOCAL_LENGTH_DOWN_ONLY:
-	case INPUT_PHOTO_MODE_DOF_DOWN_ONLY:
-	case INPUT_PHOTO_MODE_FILTER_INTENSITY_DOWN:
-	case INPUT_PHOTO_MODE_EXPOSURE_DOWN:
-	case INPUT_PHOTO_MODE_CONTRAST_DOWN_ONLY:
-		return 1.0f;
-	case INPUT_MOVE_LEFT_ONLY:
-	case INPUT_LOOK_LEFT_ONLY:
-	case INPUT_VEH_MOVE_LEFT_ONLY:
-	case INPUT_VEH_FLY_YAW_LEFT:
-	case INPUT_VEH_FLY_ROLL_LEFT_ONLY:
-	case INPUT_VEH_SUB_TURN_LEFT_ONLY:
-	case INPUT_VEH_SUB_TURN_HARD_LEFT:
-	case INPUT_VEH_DRAFT_TURN_LEFT_ONLY:
-	case INPUT_VEH_BOAT_TURN_LEFT_ONLY:
-	case INPUT_VEH_CAR_TURN_LEFT_ONLY:
-	case INPUT_HORSE_MOVE_LEFT_ONLY:
-	case INPUT_PARACHUTE_TURN_LEFT_ONLY:
-	case INPUT_PARACHUTE_BRAKE_LEFT:
-	case INPUT_MINIGAME_FISHING_LEAN_LEFT:
-	case INPUT_PHOTO_MODE_MOVE_LEFT_ONLY:
-	case INPUT_PHOTO_MODE_ROTATE_LEFT:
-		return -1.0f;
-	case INPUT_MOVE_RIGHT_ONLY:
-	case INPUT_LOOK_RIGHT_ONLY:
-	case INPUT_VEH_MOVE_RIGHT_ONLY:
-	case INPUT_VEH_FLY_YAW_RIGHT:
-	case INPUT_VEH_FLY_ROLL_RIGHT_ONLY:
-	case INPUT_VEH_SUB_TURN_RIGHT_ONLY:
-	case INPUT_VEH_SUB_TURN_HARD_RIGHT:
-	case INPUT_VEH_DRAFT_TURN_RIGHT_ONLY:
-	case INPUT_VEH_BOAT_TURN_RIGHT_ONLY:
-	case INPUT_VEH_CAR_TURN_RIGHT_ONLY:
-	case INPUT_HORSE_MOVE_RIGHT_ONLY:
-	case INPUT_PARACHUTE_TURN_RIGHT_ONLY:
-	case INPUT_PARACHUTE_BRAKE_RIGHT:
-	case INPUT_MINIGAME_FISHING_LEAN_RIGHT:
-	case INPUT_PHOTO_MODE_MOVE_RIGHT_ONLY:
-	case INPUT_PHOTO_MODE_ROTATE_RIGHT:
-		return 1.0f;
-	case INPUT_VEH_ACCELERATE:
-	case INPUT_VEH_FLY_THROTTLE_UP:
-	case INPUT_VEH_SUB_THROTTLE_UP:
-	case INPUT_VEH_PUSHBIKE_PEDAL:
-	case INPUT_VEH_DRAFT_ACCELERATE:
-	case INPUT_VEH_BOAT_ACCELERATE:
-	case INPUT_VEH_CAR_ACCELERATE:
-	case INPUT_VEH_HANDCART_ACCELERATE:
-	case INPUT_CREATOR_ZOOM_IN:
-	case INPUT_MINIGAME_FISHING_REEL_SPEED_UP:
-	case INPUT_MINIGAME_FISHING_MANUAL_REEL_IN:
-	case INPUT_CAMERA_ADVANCED_ZOOM_IN:
-	case INPUT_PHOTO_MODE_ZOOM_IN:
-		return -1.0f;
-	case INPUT_VEH_BRAKE:
-	case INPUT_VEH_FLY_THROTTLE_DOWN:
-	case INPUT_VEH_SUB_THROTTLE_DOWN:
-	case INPUT_VEH_PUSHBIKE_FRONT_BRAKE:
-	case INPUT_VEH_PUSHBIKE_REAR_BRAKE:
-	case INPUT_VEH_DRAFT_BRAKE:
-	case INPUT_VEH_BOAT_BRAKE:
-	case INPUT_VEH_CAR_BRAKE:
-	case INPUT_VEH_HANDCART_BRAKE:
-	case INPUT_CREATOR_ZOOM_OUT:
-	case INPUT_MINIGAME_FISHING_REEL_SPEED_DOWN:
-	case INPUT_MINIGAME_FISHING_MANUAL_REEL_OUT_MODIFER:
-	case INPUT_CAMERA_ADVANCED_ZOOM_OUT:
-	case INPUT_PHOTO_MODE_ZOOM_OUT:
-		return 1.0f;
-	}
-
-	return 0.0f;
-}
-
-static void cache_analog_binding(uint32_t vk, uint32_t packed, uint32_t source_kind, uint32_t action_id, uintptr_t io_value, float sign)
-{
-	if (!io_value || sign == 0.0f)
-		return;
-
-	for (auto& binding : rdr2_analog_bindings)
-	{
-		if (binding.valid
-			&& binding.packed == packed
-			&& binding.action_id == action_id
-			&& binding.io_value == io_value)
-		{
-			binding.vk = vk;
-			binding.source_kind = source_kind;
-			binding.sign = sign;
-			return;
-		}
-	}
-
-	for (auto& binding : rdr2_analog_bindings)
-	{
-		if (!binding.valid)
-		{
-			binding =
-			{
-				io_value,
-				packed,
-				vk,
-				source_kind,
-				action_id,
-				sign,
-				0.0f,
-				true
-			};
-			return;
-		}
-	}
-}
-
-static void* resolve_call_target(void* call_instruction)
-{
-	if (!call_instruction)
-		return nullptr;
-
-	auto* call = static_cast<uint8_t*>(call_instruction);
-	const auto rel = *reinterpret_cast<int32_t*>(call + 1);
-	return call + 5 + rel;
-}
-
 #ifdef AS_DEBUG
 static void nop_bytes(void* address, size_t size)
 {
@@ -594,12 +404,10 @@ void rdr2_deinit()
 		rdr2_update_pending_input_hook.destroy();
 	}
 
-	rdr2_set_input_value = nullptr;
 	rdr2_keyboard_ignore_input = nullptr;
 	rdr2_keyboard_enabled = nullptr;
 	rdr2_keyboard_di_device = nullptr;
 	rdr2_keyboard_di_lost = nullptr;
 	rdr2_hwnd_main = nullptr;
-	std::memset(rdr2_analog_bindings, 0, sizeof(rdr2_analog_bindings));
 	std::memset(rdr2_injected_keyboard_values, 0, sizeof(rdr2_injected_keyboard_values));
 }
