@@ -45,7 +45,7 @@ static FakeAxisInput* __fastcall UserMappingAxis_OnButtonChange_detour(void* _th
 	return input;
 }
 
-static bool __fastcall UserMapping_AddMapping_detour(void* _this, uint16_t rawKey, void* mappedKey, int type, float extraData, void* presetName, float thresholdPress, float thresholdRelease, unsigned int overridableID, unsigned int joinID)
+static bool __fastcall UserMapping_AddMapping_detour(void* _this, uint16_t rawKey, void* mappedKey, uint64_t newArg4, uint64_t newArg5, int type, float extraData, void* presetName, float thresholdPress, float thresholdRelease, unsigned int overridableID, unsigned int joinID)
 {
 	{
 		std::lock_guard lock(map_mtx);
@@ -56,7 +56,7 @@ static bool __fastcall UserMapping_AddMapping_detour(void* _this, uint16_t rawKe
 		}
 	}
 
-	return reinterpret_cast<decltype(&UserMapping_AddMapping_detour)>(UserMapping_AddMapping_hook.original)(_this, rawKey, mappedKey, type, extraData, presetName, thresholdPress, thresholdRelease, overridableID, joinID);
+	return reinterpret_cast<decltype(&UserMapping_AddMapping_detour)>(UserMapping_AddMapping_hook.original)(_this, rawKey, mappedKey, newArg4, newArg5, type, extraData, presetName, thresholdPress, thresholdRelease, overridableID, joinID);
 }
 
 static void __fastcall ContextManager_ProcessInput_detour(void* _this, float dt, void* cache, uint64_t time)
@@ -87,7 +87,7 @@ void cyberpunk2077_init()
 	}
 
 	{
-		auto UserMapping_AddMapping = Module(nullptr).range.scan(Pattern("48 8B C4 48 89 58 08 48 89 70 10 48 89 78 18 4C 89 60 20 55 41 56 41 57 48 8B EC 48 83 EC 60 41 0F B6 F9")).as<void*>();
+		auto UserMapping_AddMapping = Module(nullptr).range.scan(Pattern("48 89 5C 24 18 48 89 6C 24 20 56 57 41 56 48 83 EC 70 0F B6 B4 24 B8 00 00 00 49 8B F9 49 8B D8 0F B7 EA 4C 8B F1 40 80 FE 03")).as<void*>();
 		std::cout << "UserMapping_AddMapping = " << UserMapping_AddMapping << std::endl;
 
 		UserMapping_AddMapping_hook.detour = reinterpret_cast<void*>(&UserMapping_AddMapping_detour);
